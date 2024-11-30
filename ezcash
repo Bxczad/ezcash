@@ -1,0 +1,90 @@
+import asyncio
+from telethon import TelegramClient, events
+import re
+import traceback
+
+# Данные из config.py
+API_ID = 27260384
+API_HASH = "62a7718d034246389f4046f6c180196d"
+PHONE_NUMBER = "+79826160910"
+
+# Токен бота
+BOT_TOKEN = "7632181128:AAE5m1jyQOksN8_ifijMbMaJb48PObLsbdo"  # Замените на ваш токен бота
+
+# ID или юзернейм канала, куда отправлять промокоды
+TARGET_CHANNEL = "@terixpromo"  # Канал, куда будут отправляться промокоды
+
+# Регулярное выражение для поиска полных промокодов
+PROMO_REGEX = r"EZ-[A-Z0-9]{6}-SH"  # Формат промокодов: EZ-<6 символов>-SH
+
+# Список отправленных промокодов
+sent_promo_codes = []
+
+# Клиент для вашего аккаунта
+user_client = TelegramClient("user_session", API_ID, API_HASH)
+
+# Клиент для бота (с API_ID и API_HASH)
+bot_client = TelegramClient("bot_session", API_ID, API_HASH)
+
+# Функция отправки промокодов через бота
+async def send_promo_code(code):
+    if code not in sent_promo_codes:
+        try:
+            print(f"Отправка промокода: {code}")  # Логируем промокод перед отправкой
+            # Формируем сообщение в нужном формате
+            message = f"`EZ-{code[3:-3]}-SH`\n👉 https://ezc.sh/terix"  # Промокод и ссылка
+            await bot_client.send_message(TARGET_CHANNEL, message, parse_mode="md")
+            print(f"Промокод успешно отправлен: {code}")
+            sent_promo_codes.append(code)
+        except Exception as e:
+            print(f"Ошибка при отправке промокода {code}: {e}")
+            traceback.print_exc()
+
+# Обработка новых сообщений из всех каналов
+@user_client.on(events.NewMessage(incoming=True))
+async def handle_new_message(event):
+    try:
+        if event.is_channel and event.raw_text:
+            promo_codes = re.findall(PROMO_REGEX, event.raw_text)  # Ищем полные промокоды
+            for code in promo_codes:
+                await send_promo_code(code)
+    except Exception as e:
+        print(f"Ошибка обработки нового сообщения: {e}")
+        traceback.print_exc()
+
+# Обработка редактированных сообщений из всех каналов
+@user_client.on(events.MessageEdited(incoming=True))
+async def handle_edited_message(event):
+    try:
+        if event.is_channel and event.raw_text:
+            promo_codes = re.findall(PROMO_REGEX, event.raw_text)  # Ищем полные промокоды
+            for code in promo_codes:
+                await send_promo_code(code)
+    except Exception as e:
+        print(f"Ошибка обработки редактированного сообщения: {e}")
+        traceback.print_exc()
+
+# Функция переподключения при ошибках сессии
+async def reconnect():
+    while True:
+        try:
+            print("Процесс авторизации через номер телефона...")
+            await user_client.start(phone=PHONE_NUMBER)
+            print("user_client успешно запущен!")
+            await bot_client.start(bot_token=BOT_TOKEN)
+            print("bot_client успешно запущен!")
+            break
+        except Exception as e:
+            print(f"Ошибка при подключении: {e}")
+            traceback.print_exc()
+            await asyncio.sleep(15)
+
+# Запуск клиента
+print("Скрипт запущен. Чтение всех каналов, где есть ваш аккаунт...")
+async def main():
+    await reconnect()
+    await user_client.run_until_disconnected()
+
+# Запуск программы
+if __name__ == "__main__":
+    asyncio.run(main())
